@@ -1,0 +1,3 @@
+name: frok-vickrey-auction
+plugins:
+  - name: vyper
