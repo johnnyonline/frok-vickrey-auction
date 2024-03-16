@@ -2,12 +2,14 @@
 
 # @notice Frok.AI Vickrey Auction
 # @dev Inspired by The Llamas auction house
+# @dev This contract does not support rebasing ERC20 tokens, or ERC20 tokens that have a fee on transfer.
 # @author johnnyonline
 # @license MIT
 
-interface NFT:
+from vyper.interfaces import ERC20
+
+interface ERC721:
     def mint() -> uint256: nonpayable
-    def burn(token_id: uint256): nonpayable
     def transferFrom(from_addr: address, to_addr: address, token_id: uint256): nonpayable
 
 struct Auction:
@@ -73,7 +75,7 @@ PRICISION: constant(uint256) = 100
 INCREMENT_PERCENTAGE_LOWER_BOUND: constant(uint256) = 2
 INCREMENT_PERCENTAGE_UPPER_BOUND: constant(uint256) = 15
 DURATION_LOWER_BOUND: constant(uint256) = 3600
-DURATION_UPPER_BOUND: constant(uint256) = 259200
+DURATION_UPPER_BOUND: constant(uint256) = 259200 # @todo - make private
 
 # Auction
 time_buffer: public(uint256)
@@ -81,7 +83,8 @@ reserve_price: public(uint256)
 min_bid_increment_percentage: public(uint256)
 duration: public(uint256)
 k: public(uint256)
-nft: public(NFT)
+nft: public(ERC721)
+token: public(ERC20) # @todo - make immutable
 auction: public(Auction)
 pending_returns: public(HashMap[address, uint256])
 
@@ -101,7 +104,8 @@ proceeds_receiver_split_percentage: public(uint256)
 
 @external
 def __init__(
-    _nft: NFT,
+    _nft: ERC721,
+    _token: ERC20,
     _time_buffer: uint256,
     _reserve_price: uint256,
     _min_bid_increment_percentage: uint256,
@@ -124,6 +128,7 @@ def __init__(
     assert _k > 0 and _k < PRICISION, "k out of range"
 
     self.nft = _nft
+    self.token = _token
     self.time_buffer = _time_buffer
     self.reserve_price = _reserve_price
     self.min_bid_increment_percentage = _min_bid_increment_percentage
@@ -169,14 +174,13 @@ def settle_auction():
 
 
 @external
-@payable
 @nonreentrant("lock")
-def create_bid(_id: uint256, _bid_amount: uint256):
+def create_bid(_id: uint256, _bid: uint256):
     """
     @dev Create a bid.
     """
 
-    self._create_bid(_id, _bid_amount)
+    self._create_bid(_id, _bid)
 
 
 ### WITHDRAW ###
@@ -191,7 +195,7 @@ def withdraw():
 
     _pending_amount: uint256 = self.pending_returns[msg.sender]
     self.pending_returns[msg.sender] = 0
-    raw_call(msg.sender, b"", value=_pending_amount)
+    self.token.transfer(msg.sender, _pending_amount, default_return_value=True)
 
     log Withdraw(msg.sender, _pending_amount)
 
@@ -253,7 +257,7 @@ def set_duration(_duration: uint256):
     log AuctionDurationUpdated(_duration)
 
 @external
-def set_k(_k: uint256):
+def set_k(_k: uint256): # @todo set_price_function
     """
     @notice Admin function to set the k value.
     """
@@ -318,17 +322,19 @@ def _settle_auction():
         self.nft.transferFrom(self, self.owner, self.auction.nft_id)
     else:
         self.nft.transferFrom(self, self.auction.bidder, self.auction.nft_id)
+        _refund_amount: uint256 = self.auction.bid - self.auction.price
+        if _refund_amount > 0:
+            self.pending_returns[self.auction.bidder] += _refund_amount
 
     if self.auction.price > 0:
-        fee: uint256 = (self.auction.price * self.proceeds_receiver_split_percentage) / PRICISION
-        owner_amount: uint256 = self.auction.price - fee
-        raw_call(self.owner, b"", value=owner_amount)
-        raw_call(self.proceeds_receiver, b"", value=fee)
+        _fee: uint256 = (self.auction.price * self.proceeds_receiver_split_percentage) / PRICISION
+        _owner_amount: uint256 = self.auction.price - _fee
+        self.token.transfer(self.owner, _owner_amount, default_return_value=True)
+        self.token.transfer(self.proceeds_receiver, _fee, default_return_value=True)
 
     log AuctionSettled(self.auction.nft_id, self.auction.bidder, self.auction.bid, self.auction.price)
 
 @internal
-@payable
 def _create_bid(_id: uint256, _bid: uint256):
     assert self.auction.nft_id == _id, "NFT not up for auction"
     assert block.timestamp < self.auction.end_time, "Auction expired"
@@ -340,14 +346,12 @@ def _create_bid(_id: uint256, _bid: uint256):
             (self.auction.bid * self.min_bid_increment_percentage) / PRICISION
         ), "Must send more than last bid by min_bid_increment_percentage amount"
 
-        _price = self.auction.bid + (self.k * (_bid - self.auction.bid) / PRICISION) # @todo - get from external contract
-
-    assert msg.value == _price, "Sent value does not equal price" # @todo - enable ERC20
+        _price = self.auction.bid + (self.k * (_bid - self.auction.bid) / PRICISION) # @todo - (2) get from external contract and make sure bid >= price
 
     _last_bidder: address = self.auction.bidder
 
     if _last_bidder != empty(address):
-        self.pending_returns[_last_bidder] += self.auction.price
+        self.pending_returns[_last_bidder] += self.auction.bid
 
     self.auction.bid = _bid
     self.auction.price = _price
@@ -360,3 +364,5 @@ def _create_bid(_id: uint256, _bid: uint256):
         log AuctionExtended(self.auction.nft_id, self.auction.end_time)
 
     log AuctionBid(self.auction.nft_id, msg.sender, _bid, _price, _extended)
+
+    self.token.transferFrom(msg.sender, self, _bid, default_return_value=True)
