@@ -10,7 +10,10 @@ from vyper.interfaces import ERC20
 
 interface ERC721:
     def mint() -> uint256: nonpayable
-    def transferFrom(from_addr: address, to_addr: address, token_id: uint256): nonpayable
+    def safeTransferFrom(from_addr: address, to_addr: address, token_id: uint256): nonpayable
+
+interface PriceProvider:
+    def get_price(highest_bid: uint256, second_highest_bid: uint256) -> uint256: nonpayable
 
 struct Auction:
         nft_id: uint256
@@ -44,8 +47,8 @@ event AuctionMinBidIncrementPercentageUpdated:
 event AuctionDurationUpdated:
     duration: uint256
 
-event KUpdated:
-    k: uint256
+event PriceProviderUpdated:
+    price_provider: PriceProvider
 
 event OwnerUpdated:
     owner: address
@@ -62,8 +65,9 @@ event AuctionSettled:
     price: uint256
 
 event Withdraw:
-    _withdrawer: indexed(address)
-    _amount: uint256
+    called_by: indexed(address)
+    reciver: indexed(address)
+    amount: uint256
 
 
 # Technically vyper doesn't need this as it is automatic
@@ -75,17 +79,20 @@ PRICISION: constant(uint256) = 100
 INCREMENT_PERCENTAGE_LOWER_BOUND: constant(uint256) = 2
 INCREMENT_PERCENTAGE_UPPER_BOUND: constant(uint256) = 15
 DURATION_LOWER_BOUND: constant(uint256) = 3600
-DURATION_UPPER_BOUND: constant(uint256) = 259200 # @todo - make private
+DURATION_UPPER_BOUND: constant(uint256) = 259200
 
 # Auction
 time_buffer: public(uint256)
 reserve_price: public(uint256)
 min_bid_increment_percentage: public(uint256)
 duration: public(uint256)
-k: public(uint256)
-nft: public(ERC721)
-token: public(ERC20) # @todo - make immutable
+
+price_provider: public(PriceProvider)
 auction: public(Auction)
+
+nft: public(immutable(ERC721))
+token: public(immutable(ERC20))
+
 pending_returns: public(HashMap[address, uint256])
 
 # Permissions
@@ -106,13 +113,13 @@ proceeds_receiver_split_percentage: public(uint256)
 def __init__(
     _nft: ERC721,
     _token: ERC20,
+    _price_provider: PriceProvider,
     _time_buffer: uint256,
     _reserve_price: uint256,
     _min_bid_increment_percentage: uint256,
     _duration: uint256,
-    _proceeds_receiver: address,
     _proceeds_receiver_split_percentage: uint256,
-    _k: uint256
+    _proceeds_receiver: address,
 ):
     assert _time_buffer > 0, "_time_buffer must be greater than 0"
     assert _reserve_price > 0, "_reserve_price must be greater than 0"
@@ -121,21 +128,22 @@ def __init__(
         _min_bid_increment_percentage <= INCREMENT_PERCENTAGE_UPPER_BOUND
     ), "_min_bid_increment_percentage out of range"
     assert _duration >= DURATION_LOWER_BOUND and _duration <= DURATION_UPPER_BOUND, "_duration out of range"
-    assert _proceeds_receiver != empty(address), "_proceeds_receiver cannot be empty"
     assert (
         _proceeds_receiver_split_percentage > 0 and _proceeds_receiver_split_percentage < PRICISION
     ), "_proceeds_receiver_split_percentage out of range"
-    assert _k > 0 and _k < PRICISION, "k out of range"
+    assert _proceeds_receiver != empty(address), "_proceeds_receiver cannot be empty"
 
-    self.nft = _nft
-    self.token = _token
+    nft = _nft
+    token = _token
+
+    self.price_provider = _price_provider
+
     self.time_buffer = _time_buffer
     self.reserve_price = _reserve_price
     self.min_bid_increment_percentage = _min_bid_increment_percentage
     self.duration = _duration
-    self.proceeds_receiver = _proceeds_receiver
     self.proceeds_receiver_split_percentage = _proceeds_receiver_split_percentage
-    self.k = _k
+    self.proceeds_receiver = _proceeds_receiver
 
     self.owner = msg.sender
 
@@ -153,7 +161,8 @@ def create_auction():
     """
 
     assert msg.sender == self.owner, "Caller is not the owner"
-    assert self.paused == False, "Auction is paused"
+    # assert self.paused == False, "Auction is paused"
+    assert not self.paused, "Auction is paused"
 
     self._create_auction()
 
@@ -165,7 +174,7 @@ def settle_auction():
       Throws if the auction is not paused.
     """
 
-    assert self.paused == True, "Auction is not paused"
+    assert self.paused, "Auction is not paused"
 
     self._settle_auction()
 
@@ -188,16 +197,22 @@ def create_bid(_id: uint256, _bid: uint256):
 
 @external
 @nonreentrant("lock")
-def withdraw():
+def withdraw(_for: address = msg.sender):
     """
-    @dev Withdraw ETH after losing auction.
+    @dev Withdraw Token after losing auction.
     """
 
-    _pending_amount: uint256 = self.pending_returns[msg.sender]
-    self.pending_returns[msg.sender] = 0
-    self.token.transfer(msg.sender, _pending_amount, default_return_value=True)
+    self._withdraw(_for)
 
-    log Withdraw(msg.sender, _pending_amount)
+@external
+@nonreentrant("lock")
+def withdraw_multiple(_fors: address[30]):
+    """
+    @dev Withdraw Token after losing auction, for multiple addresses.
+    """
+
+    for _for in _fors:
+        self._withdraw(_for)
 
 
 ### ADMIN FUNCTIONS ###
@@ -257,17 +272,17 @@ def set_duration(_duration: uint256):
     log AuctionDurationUpdated(_duration)
 
 @external
-def set_k(_k: uint256): # @todo set_price_function
+def set_price_provider(_price_provider: PriceProvider):
     """
-    @notice Admin function to set the k value.
+    @notice Admin function to set the price provider.
     """
 
     assert msg.sender == self.owner, "Caller is not the owner"
-    assert _k > 0 and _k < PRICISION, "k out of range"
 
-    self.k = _k
+    self.price_provider = _price_provider
 
-    log KUpdated(_k)
+    log PriceProviderUpdated(_price_provider)
+
 
 @external
 def set_owner(_owner: address):
@@ -291,7 +306,7 @@ def _create_auction():
 
     self.paused = True
 
-    _id: uint256 = self.nft.mint()
+    _id: uint256 = nft.mint()
     _start_time: uint256 = block.timestamp
     _end_time: uint256 = _start_time + self.duration
 
@@ -312,16 +327,16 @@ def _create_auction():
 @internal
 def _settle_auction():
     assert self.auction.start_time != 0, "Auction hasn't begun"
-    assert self.auction.settled == False, "Auction has already been settled"
+    assert not self.auction.settled, "Auction has already been settled"
     assert block.timestamp > self.auction.end_time, "Auction hasn't completed"
 
     self.paused = False
     self.auction.settled = True
 
     if self.auction.bidder == empty(address):
-        self.nft.transferFrom(self, self.owner, self.auction.nft_id)
+        nft.safeTransferFrom(self, self.owner, self.auction.nft_id)
     else:
-        self.nft.transferFrom(self, self.auction.bidder, self.auction.nft_id)
+        nft.safeTransferFrom(self, self.auction.bidder, self.auction.nft_id)
         _refund_amount: uint256 = self.auction.bid - self.auction.price
         if _refund_amount > 0:
             self.pending_returns[self.auction.bidder] += _refund_amount
@@ -329,8 +344,8 @@ def _settle_auction():
     if self.auction.price > 0:
         _fee: uint256 = (self.auction.price * self.proceeds_receiver_split_percentage) / PRICISION
         _owner_amount: uint256 = self.auction.price - _fee
-        self.token.transfer(self.owner, _owner_amount, default_return_value=True)
-        self.token.transfer(self.proceeds_receiver, _fee, default_return_value=True)
+        token.transfer(self.owner, _owner_amount, default_return_value=True)
+        token.transfer(self.proceeds_receiver, _fee, default_return_value=True)
 
     log AuctionSettled(self.auction.nft_id, self.auction.bidder, self.auction.bid, self.auction.price)
 
@@ -346,7 +361,8 @@ def _create_bid(_id: uint256, _bid: uint256):
             (self.auction.bid * self.min_bid_increment_percentage) / PRICISION
         ), "Must send more than last bid by min_bid_increment_percentage amount"
 
-        _price = self.auction.bid + (self.k * (_bid - self.auction.bid) / PRICISION) # @todo - (2) get from external contract and make sure bid >= price
+        _price = self.price_provider.get_price(_bid, self.auction.bid)
+        assert _bid >= _price, "Bid must be greater than or equal to price"
 
     _last_bidder: address = self.auction.bidder
 
@@ -365,4 +381,12 @@ def _create_bid(_id: uint256, _bid: uint256):
 
     log AuctionBid(self.auction.nft_id, msg.sender, _bid, _price, _extended)
 
-    self.token.transferFrom(msg.sender, self, _bid, default_return_value=True)
+    token.transferFrom(msg.sender, self, _bid, default_return_value=True)
+
+@internal
+def _withdraw(_for: address):
+    _pending_amount: uint256 = self.pending_returns[_for]
+    if _pending_amount > 0:
+        self.pending_returns[_for] = 0
+        token.transfer(_for, _pending_amount, default_return_value=True)
+        log Withdraw(msg.sender, _for, _pending_amount)
