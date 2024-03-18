@@ -107,8 +107,8 @@ minter: public(address)
 
 @external
 def __init__():
-    self.symbol = "LLAMA"
-    self.name = "The Llamas"
+    self.symbol = "FROK"
+    self.name = "Frok"
     self.owner = msg.sender
     self.contract_uri = "https://ivory-fast-planarian-364.mypinata.cloud/ipfs/QmPAS4WmxAcqRnKyUS1KS4pCeWDMmZWyph6N3DzE6rCb7L"
     self.default_uri = "https://ivory-fast-planarian-364.mypinata.cloud/ipfs/QmSBtCSpm3HzwfqBYLLYb7d1AkbQ73cvGWu3bbk4vP2PGd"
@@ -437,7 +437,7 @@ def mint() -> uint256:
     """
 
     # Checks
-    assert msg.sender == self.minter
+    assert msg.sender == self.minter, "Caller is not the minter"
 
     token_id: uint256 = self.token_count
     self._add_token_to(msg.sender, token_id)
