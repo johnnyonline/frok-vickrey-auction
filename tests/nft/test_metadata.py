@@ -5,7 +5,6 @@ def test_contract_uri_exists(token):
     assert len(token.contractURI()) > 10
 
 
-@pytest.mark.skip()
 def test_contract_prereveal_is_initially_false(token):
     assert not token.revealed()
 

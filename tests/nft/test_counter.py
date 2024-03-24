@@ -13,4 +13,4 @@ def test_increment(minted):
 
 def test_nonzero_owner_index(token):
     with ape.reverts():
-        token.tokenOfOwnerByIndex("0x0" + "0" * 39, 0)
+        token.tokenOfOwnerByIndex(ape.utils.ZERO_ADDRESS, 0)

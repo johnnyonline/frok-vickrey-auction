@@ -8,40 +8,40 @@ import hexbytes
 # Some helper functions
 
 
-# def _ensureToken(token, token_id, owner):
-#     # XXX Make sure that token does not yet exist
-#     stop_mint = False
-#     i = 0
-#     while stop_mint is False:
-#         _mint(token, owner)
-#         try:
-#             if token.ownerOf(token_id) == owner:
-#                 stop_mint = True
-#         except Exception:
-#             stop_mint = False
-#         if i > 10:
-#             assert False
-#             break
-#         i += 1
+def _ensureToken(token, token_id, owner):
+    # XXX Make sure that token does not yet exist
+    stop_mint = False
+    i = 0
+    while stop_mint is False:
+        _mint(token, owner)
+        try:
+            if token.ownerOf(token_id) == owner:
+                stop_mint = True
+        except Exception:
+            stop_mint = False
+        if i > 10:
+            # assert False
+            break
+        i += 1
 
 
-# def _mint(token, deployer):
-#     token.mint(sender=deployer)
+def _mint(token, deployer):
+    token.mint(sender=deployer)
 
 
-# def _ensureNotToken(token, tokenID):
-#     with ape.reverts():
-#         token.ownerOf(tokenID)
+def _ensureNotToken(token, tokenID):
+    with ape.reverts():
+        token.ownerOf(tokenID)
 
 
-# #
-# # Verify that a Transfer event has been logged
-# #
-# def _verifyTransferEvent(txn_receipt, _from, to, tokenID):
-#     event = txn_receipt.events["Transfer"]
-#     assert event["_tokenId"] == tokenID
-#     assert event["_from"] == _from
-#     assert event["_to"] == to
+#
+# Verify that a Transfer event has been logged
+#
+def _verifyTransferEvent(txn_receipt, _from, to, tokenID):
+    event = ape.project.Frok.Transfer.from_receipt(txn_receipt)[0]
+    assert event._tokenId == tokenID
+    assert event._from == _from
+    assert event._to == to
 
 
 # #
@@ -88,233 +88,61 @@ import hexbytes
 #
 def test_balanceOf_nonzero_address(token):
     balance = token.balanceOf("0x1" + "0" * 39)
-    assert 0 == balance # @todo - here
+    assert 0 == balance
 
 
-# def test_stop_al_mint(token):
-#     assert token.al_mint_started() is False
-#     token.start_al_mint()
-#     assert token.al_mint_started() is True
-#     token.stop_al_mint()
-#     assert token.al_mint_started() is False
+
+def test_mint_not_minter(token, alice):
+    with ape.reverts():
+        token.mint(sender=alice)
 
 
-# #
-# # Mint a token - this also tests balanceOf and
-# # ownerOf
-# #
-# def test_mint(minted, deployer, minted_token_id):
-#     # Remember old balance and mint
-#     assert minted.balanceOf(deployer) == 1
-#     assert deployer == minted.ownerOf(minted_token_id)
+def test_withdraw_only_owner(token, alice, deployer):
+    token.mint(sender=deployer)
 
-#     # Verify that minting has created an event
-#     txn_receipt = history[-1]
-#     _verifyTransferEvent(txn_receipt, ZERO_ADDRESS, deployer, minted_token_id)
+    with ape.reverts("Caller is not the owner"):
+        token.withdraw(sender=alice)
 
 
-# def test_mint_not_minter(token, alice):
-#     with brownie.reverts():
-#         token.mint({"from": alice})
+
+#
+# Get owner of non-existing token
+#
+def test_owner_of_invalid_token_id(token):
+    token_id = 20
+    _ensureNotToken(token, token_id)
+    with ape.reverts():  # "ERC721: owner query for nonexistent token"):
+        token.ownerOf(token_id)
 
 
-# def test_allowlist_mint_one(al_minted, alice, minted_token_id):
-#     assert al_minted.balanceOf(alice) == 1
-#     assert alice == al_minted.ownerOf(minted_token_id)
-#     txn_receipt = history[-1]
-#     _verifyTransferEvent(txn_receipt, ZERO_ADDRESS, alice, minted_token_id)
+#
+# Test a valid transfer, initiated by the current owner of the token
+#
+def test_transferFrom(token, deployer, bob):
+    token_id = 1
+    _ensureToken(token, token_id, deployer)
 
+    # Remember balances
+    old_balance_deployer = token.balanceOf(deployer)
+    old_balance_bob = token.balanceOf(bob)
 
-# def test_allowlist_mint_max(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 3)
-#     token.allowlistMint(
-#         3, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.3, "ether")}
-#     )
-#     assert token.ownerOf(20) == alice
-#     assert token.ownerOf(21) == alice
-#     assert token.ownerOf(22) == alice
+    # Now do the transfer
+    txn_receipt = token.transferFrom(deployer, bob, token_id, sender=deployer)
 
+    # check owner of NFT
+    assert bob == token.ownerOf(token_id)
 
-# def test_allowlist_mint_not_started(token, alice, deployer):
-#     signed_message = signAllowlistMint(deployer, alice, 1)
-#     with brownie.reverts("AL Mint not active"):
-#         token.allowlistMint(
-#             1, 1, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#         )
+    # Check balances
+    new_balance_deployer = token.balanceOf(deployer)
+    new_balance_bob = token.balanceOf(bob)
 
+    assert new_balance_deployer + 1 == old_balance_deployer
+    assert old_balance_bob + 1 == new_balance_bob
 
-# def test_allowlist_mint_address_already_minted_max_amount(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 1)
-#     token.allowlistMint(
-#         1, 1, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#     )
-#     with brownie.reverts("Cannot mint over approved amount"):
-#         token.allowlistMint(
-#             1, 1, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#         )
+    # Verify that an Transfer event has been logged
+    _verifyTransferEvent(txn_receipt, deployer, bob, token_id)
 
-
-# def test_allowlist_mint_under_max_twice_then_max(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 3)
-#     token.allowlistMint(
-#         1, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#     )
-#     token.allowlistMint(
-#         1, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#     )
-#     assert token.balanceOf(alice) == 2
-#     with brownie.reverts("Cannot mint over approved amount"):
-#         token.allowlistMint(
-#             2, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#         )
-#     token.allowlistMint(
-#         1, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#     )
-#     assert token.balanceOf(alice) == 3
-
-
-# def test_allowlist_mint_up_to_max_then_over_max(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 3)
-#     token.allowlistMint(
-#         1, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#     )
-#     token.allowlistMint(
-#         1, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#     )
-#     token.allowlistMint(
-#         1, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#     )
-#     assert token.balanceOf(alice) == 3
-#     with brownie.reverts("Cannot mint over approved amount"):
-#         token.allowlistMint(
-#             1, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.1, "ether")}
-#         )
-
-
-# def test_allowlist_mint_too_many(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 3)
-#     with brownie.reverts("Transaction exceeds max mint amount"):
-#         token.allowlistMint(
-#             4, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.4, "ether")}
-#         )
-
-
-# def test_allowlist_mint_one_not_enough_value(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 1)
-#     with brownie.reverts("Not enough ether provided"):
-#         token.allowlistMint(
-#             1, 1, signed_message.signature, {"from": alice, "value": web3.toWei(0.09, "ether")}
-#         )
-
-
-# def test_allowlist_mint_two_not_enough_value(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 2)
-#     with brownie.reverts("Not enough ether provided"):
-#         token.allowlistMint(
-#             2, 2, signed_message.signature, {"from": alice, "value": web3.toWei(0.19, "ether")}
-#         )
-
-
-# def test_allowlist_mint_not_approved_max_amount(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 1)
-#     with brownie.reverts("Signature is not valid"):
-#         token.allowlistMint(
-#             3, 3, signed_message.signature, {"from": alice, "value": web3.toWei(0.3, "ether")}
-#         )
-
-
-# def test_allowlist_mint_invalid_signature(token, alice):
-#     token.start_al_mint()
-#     signature = "0xabcd"
-#     with brownie.reverts():
-#         token.allowlistMint(3, 3, signature, {"from": alice, "value": web3.toWei(0.3, "ether")})
-
-
-# def test_allowlist_mint_zero_tokens_does_nothing(token, alice, deployer):
-#     token.start_al_mint()
-#     signed_message = signAllowlistMint(deployer, alice, 1)
-#     assert token.al_mint_amount(alice) == 0
-#     token.allowlistMint(
-#         0, 1, signed_message.signature, {"from": alice, "value": web3.toWei(0, "ether")}
-#     )
-#     assert token.al_mint_amount(alice) == 0
-#     assert token.balanceOf(alice) == 0
-
-
-# def test_withdraw(token, deployer, al_minted):
-#     balanceBefore = deployer.balance()
-#     token.withdraw({"from": deployer})
-#     balanceAfter = deployer.balance()
-
-#     assert balanceAfter == balanceBefore + web3.toWei(0.1, "ether")
-
-
-# def test_withdraw_only_owner(token, alice, deployer):
-#     token.mint()
-
-#     with brownie.reverts("Caller is not the owner"):
-#         token.withdraw({"from": alice})
-
-
-# #
-# # Cannot mint an existing token
-# #
-# # def test_mint_tokenExists(token):
-# #    me = accounts[0];
-# #    bob = accounts[1]
-# #    tokenID = 20;
-# #    _ensureToken(token, tokenID, me);
-# #    # Try to mint
-# #    with brownie.reverts(): #"Token already exists"):
-# #        token._mint(tokenID, {"from": me});
-
-
-# #
-# # Get owner of non-existing token
-# #
-# def test_owner_of_invalid_token_id(token):
-#     token_id = 20
-#     _ensureNotToken(token, token_id)
-#     with brownie.reverts():  # "ERC721: owner query for nonexistent token"):
-#         token.ownerOf(token_id)
-
-
-# #
-# # Test a valid transfer, initiated by the current owner of the token
-# #
-# def test_transferFrom(token, deployer, bob):
-#     token_id = 20
-#     _ensureToken(token, token_id, deployer)
-
-#     # Remember balances
-#     old_balance_deployer = token.balanceOf(deployer)
-#     old_balance_bob = token.balanceOf(bob)
-
-#     # Now do the transfer
-#     txn_receipt = token.transferFrom(deployer, bob, token_id, {"from": deployer})
-
-#     # check owner of NFT
-#     assert bob == token.ownerOf(token_id)
-
-#     # Check balances
-#     new_balance_deployer = token.balanceOf(deployer)
-#     new_balance_bob = token.balanceOf(bob)
-
-#     assert new_balance_deployer + 1 == old_balance_deployer
-#     assert old_balance_bob + 1 == new_balance_bob
-
-#     # Verify that an Transfer event has been logged
-#     _verifyTransferEvent(txn_receipt, deployer, bob, token_id)
-
-
+# // todo - here
 # #
 # # Test an invalid transfer - from is not current owner
 # #
