@@ -62,32 +62,42 @@ def minted_token_id():
 #     return ERC721TokenReceiverImplementation.deploy({"from": deployer})
 
 
-# @pytest.fixture(scope="function")
-# def erc20token(deployer, BasicERC20):
-#     return BasicERC20.deploy({"from": deployer})
+@pytest.fixture(scope="function")
+def erc20token(project, deployer):
+    return project.BasicERC20.deploy(sender=deployer)
+
+
+@pytest.fixture(scope="function")
+def minted_erc20token_to_users(erc20token, alice, bob, charlie):
+    erc20token.mint(alice, 1000 * 10 ** 18, sender=deployer)
+    erc20token.mint(bob, 1000 * 10 ** 18, sender=deployer)
+    erc20token.mint(charlie, 1000 * 10 ** 18, sender=deployer)
+
+
+@pytest.fixture(scope="function")
+def price_provider(project, deployer):
+    return project.PriceProvider.deploy(50, sender=deployer)
+
+
+@pytest.fixture(scope="function")
+def auction_house(project, token, erc20token, price_provider, deployer, split_recipient):
+    auction_house = project.VickreyAuction.deploy(
+        token,
+        erc20token,
+        price_provider, 
+        100, # time_buffer
+        100, # reserve_price
+        5, # min_bid_increment_percentage
+        3600, # duration
+        95, # _proceeds_receiver_split_percentage
+        split_recipient,
+        sender=deployer
+    )
+    return auction_house
 
 
 # @pytest.fixture(scope="function")
-# def minted_erc20token_to_users(erc20token, alice, bob, charlie):
-#     erc20token.mint(alice, 1000 * 10 ** 18, {"from": deployer})
-#     erc20token.mint(bob, 1000 * 10 ** 18, {"from": deployer})
-#     erc20token.mint(charlie, 1000 * 10 ** 18, {"from": deployer})
-
-
-# @pytest.fixture(scope="function")
-# def price_provider(deployer, PriceProvider):
-#     return PriceProvider.deploy(0.5, {"from": deployer})
-
-
-# @pytest.fixture(scope="function") # @todo
-# def auction_house(VickreyAuction, token, erc20token, price_provider, deployer, split_recipient):
-#     auction_house = VickreyAuction.deploy(
-#         token, erc20token, price_provider, 100, 100, 5, 3600, 95, split_recipient.address, {"from": deployer}
-#     )
-#     return auction_house
-
-
-# @pytest.fixture(scope="function")
+# vickrey_auction_created
 # def auction_house_unpaused(VickreyAuction, token, deployer, split_recipient):
 #     auction_house = VickreyAuction.deploy(
 #         token, 100, 100, 5, 100, split_recipient.address, 95, {"from": deployer}

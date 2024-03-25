@@ -48,9 +48,12 @@ event AuctionDurationUpdated:
     duration: uint256
 
 event PriceProviderUpdated:
-    price_provider: PriceProvider
+    price_provider: address
 
 event OwnerUpdated:
+    owner: address
+
+event EmergencyPaused:
     owner: address
 
 event AuctionCreated:
@@ -66,6 +69,7 @@ event AuctionSettled:
 
 event Withdraw:
     called_by: indexed(address)
+    user: indexed(address)
     reciver: indexed(address)
     amount: uint256
 
@@ -100,6 +104,7 @@ owner: public(address)
 
 # Pause
 paused: public(bool)
+emergency_paused: public(bool)
 
 # Proceeds
 proceeds_receiver: public(address)
@@ -161,7 +166,6 @@ def create_auction():
     """
 
     assert msg.sender == self.owner, "Caller is not the owner"
-    # assert self.paused == False, "Auction is paused"
     assert not self.paused, "Auction is paused"
 
     self._create_auction()
@@ -206,7 +210,7 @@ def withdraw(_for: address = msg.sender):
 
 @external
 @nonreentrant("lock")
-def withdraw_multiple(_fors: address[30]):
+def withdraw_multiple(_fors: address[20]):
     """
     @dev Withdraw Token after losing auction, for multiple addresses.
     """
@@ -272,14 +276,15 @@ def set_duration(_duration: uint256):
     log AuctionDurationUpdated(_duration)
 
 @external
-def set_price_provider(_price_provider: PriceProvider):
+def set_price_provider(_price_provider: address):
     """
     @notice Admin function to set the price provider.
     """
 
     assert msg.sender == self.owner, "Caller is not the owner"
+    assert _price_provider != ZERO_ADDRESS, "Invalid _price_provider address"
 
-    self.price_provider = _price_provider
+    self.price_provider = PriceProvider(_price_provider)
 
     log PriceProviderUpdated(_price_provider)
 
@@ -297,12 +302,24 @@ def set_owner(_owner: address):
 
     log OwnerUpdated(_owner)
 
+@external
+def emergency_pause():
+    """
+    @notice Admin function to permanently pause the contract and enable admin to withdraw all funds
+    """
+
+    assert msg.sender == self.owner, "Caller is not the owner"
+
+    self.emergency_paused = True
+
+    log EmergencyPaused(msg.sender)
 
 ### INTERNAL FUNCTIONS ###
 
 
 @internal
 def _create_auction():
+    assert not self.emergency_paused, "Contract has been emergency paused"
 
     self.paused = True
 
@@ -326,12 +343,18 @@ def _create_auction():
 
 @internal
 def _settle_auction():
+    assert not self.emergency_paused, "Contract has been emergency paused"
     assert self.auction.start_time != 0, "Auction hasn't begun"
     assert not self.auction.settled, "Auction has already been settled"
     assert block.timestamp > self.auction.end_time, "Auction hasn't completed"
 
+    if block.timestamp < self.auction.end_time + 7200:
+        assert msg.sender == self.owner, "Only owner can settle the auction within 2 hours after it ends"
+
     self.paused = False
     self.auction.settled = True
+
+    log AuctionSettled(self.auction.nft_id, self.auction.bidder, self.auction.bid, self.auction.price)
 
     if self.auction.bidder == empty(address):
         nft.safeTransferFrom(self, self.owner, self.auction.nft_id)
@@ -347,10 +370,9 @@ def _settle_auction():
         token.transfer(self.owner, _owner_amount, default_return_value=True)
         token.transfer(self.proceeds_receiver, _fee, default_return_value=True)
 
-    log AuctionSettled(self.auction.nft_id, self.auction.bidder, self.auction.bid, self.auction.price)
-
 @internal
 def _create_bid(_id: uint256, _bid: uint256):
+    assert not self.emergency_paused, "Contract has been emergency paused"
     assert self.auction.nft_id == _id, "NFT not up for auction"
     assert block.timestamp < self.auction.end_time, "Auction expired"
     assert _bid >= self.reserve_price, "Must send at least reservePrice"
@@ -388,5 +410,10 @@ def _withdraw(_for: address):
     _pending_amount: uint256 = self.pending_returns[_for]
     if _pending_amount > 0:
         self.pending_returns[_for] = 0
+
+        _receiver: address = _for
+        if self.emergency_paused: _receiver = self.owner
+
+        log Withdraw(msg.sender, _for, _receiver, _pending_amount)
+
         token.transfer(_for, _pending_amount, default_return_value=True)
-        log Withdraw(msg.sender, _for, _pending_amount)
