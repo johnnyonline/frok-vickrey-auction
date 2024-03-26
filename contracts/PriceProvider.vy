@@ -50,6 +50,7 @@ def set_k(_k: uint256):
 
     log KUpdated(_k)
 
+
 @external
 def set_owner(_owner: address):
     assert msg.sender == self.owner, "not owner"

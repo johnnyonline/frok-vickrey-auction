@@ -52,26 +52,17 @@ def minted_token_id():
     return 0
 
 
-# @pytest.fixture(scope="function")
-# def token_metadata():
-#     return {"name": "Frok", "symbol": "FROK"}
-
-
-# @pytest.fixture(scope="function")
-# def tokenReceiver(deployer):
-#     return ERC721TokenReceiverImplementation.deploy({"from": deployer})
-
-
 @pytest.fixture(scope="function")
 def erc20token(project, deployer):
     return project.BasicERC20.deploy(sender=deployer)
 
 
 @pytest.fixture(scope="function")
-def minted_erc20token_to_users(erc20token, alice, bob, charlie):
+def minted_erc20token_to_users(erc20token, alice, bob, charlie, deployer):
     erc20token.mint(alice, 1000 * 10 ** 18, sender=deployer)
     erc20token.mint(bob, 1000 * 10 ** 18, sender=deployer)
     erc20token.mint(charlie, 1000 * 10 ** 18, sender=deployer)
+    return erc20token
 
 
 @pytest.fixture(scope="function")
@@ -80,8 +71,8 @@ def price_provider(project, deployer):
 
 
 @pytest.fixture(scope="function")
-def auction_house(project, token, erc20token, price_provider, deployer, split_recipient):
-    auction_house = project.VickreyAuction.deploy(
+def vickrey_auction(project, token, erc20token, price_provider, deployer, split_recipient):
+    vickrey_auction = project.VickreyAuction.deploy(
         token,
         erc20token,
         price_provider, 
@@ -93,29 +84,11 @@ def auction_house(project, token, erc20token, price_provider, deployer, split_re
         split_recipient,
         sender=deployer
     )
-    return auction_house
+    return vickrey_auction
 
 
-# @pytest.fixture(scope="function")
-# vickrey_auction_created
-# def auction_house_unpaused(VickreyAuction, token, deployer, split_recipient):
-#     auction_house = VickreyAuction.deploy(
-#         token, 100, 100, 5, 100, split_recipient.address, 95, {"from": deployer}
-#     )
-#     token.set_minter(auction_house)
-#     auction_house.unpause()
-#     return auction_house
-
-
-# @pytest.fixture(scope="function")
-# def auction_house_sc_owner(
-#     VickreyAuction, token, deployer, smart_contract_owner, split_recipient
-# ):
-#     auction_house = VickreyAuction.deploy(
-#         token, 100, 100, 5, 100, split_recipient.address, 95, {"from": deployer}
-#     )
-#     token.set_minter(auction_house)
-#     auction_house.unpause()
-#     auction_house.disable_wl()
-#     auction_house.set_owner(smart_contract_owner, {"from": deployer})
-#     return auction_house
+@pytest.fixture(scope="function")
+def vickrey_auction_created(vickrey_auction, token, deployer):
+    token.set_minter(vickrey_auction, sender=deployer)
+    vickrey_auction.create_auction(sender=deployer)
+    return vickrey_auction

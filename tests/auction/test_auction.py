@@ -1,573 +1,449 @@
 import ape
-# from brownie import chain, web3, ZERO_ADDRESS
-# from eth_abi import encode
-# from eth_account import Account
-# from eth_account.messages import encode_defunct
 
 
-# # Helper methods
+# Helper methods
 
 
-# def create_pending_returns(auction_house, bidder_1, bidder_2):
-#     auction_house.disable_wl()
-#     auction_house.create_bid(20, 100, {"from": bidder_1, "value": "100 wei"})
-#     auction_house.create_bid(20, 200, {"from": bidder_2, "value": "200 wei"})
+def create_pending_returns(vickrey_auction_created, bidder_1, bidder_2, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=bidder_1)
+    vickrey_auction_created.create_bid(0, 100, sender=bidder_1)
+    minted_erc20token_to_users.approve(vickrey_auction_created, 200, sender=bidder_2)
+    vickrey_auction_created.create_bid(0, 200, sender=bidder_2)
 
 
 # Initialization vars
 
 
-def test_owner(auction_house, deployer):
-    assert auction_house.owner() == deployer
+def test_owner(vickrey_auction, deployer):
+    assert vickrey_auction.owner() == deployer
 
 
-def test_token(auction_house, token):
-    assert auction_house.nft() == token
+def test_token(vickrey_auction, token):
+    assert vickrey_auction.nft() == token
 
 
-def test_time_buffer(auction_house):
-    assert auction_house.time_buffer() == 100
+def test_time_buffer(vickrey_auction):
+    assert vickrey_auction.time_buffer() == 100
 
 
-def test_bid_after(auction_house):
-    assert auction_house.reserve_price() == 100
+def test_bid_after(vickrey_auction):
+    assert vickrey_auction.reserve_price() == 100
 
 
-def test_min_bid_increment_percentage(auction_house):
-    assert auction_house.min_bid_increment_percentage() == 5
+def test_min_bid_increment_percentage(vickrey_auction):
+    assert vickrey_auction.min_bid_increment_percentage() == 5
 
 
-def test_duration(auction_house):
-    assert auction_house.duration() == 3600
+def test_duration(vickrey_auction):
+    assert vickrey_auction.duration() == 3600
 
 
-def test_paused(auction_house):
-    assert not auction_house.paused()
+def test_paused(vickrey_auction):
+    assert not vickrey_auction.paused()
 
 
-def test_price_provider(auction_house, price_provider):
-    assert auction_house.price_provider() == price_provider
+def test_price_provider(vickrey_auction, price_provider):
+    assert vickrey_auction.price_provider() == price_provider
 
 
-def test_emergency_pause(auction_house):
-    assert not auction_house.emergency_paused()
+def test_emergency_pause(vickrey_auction):
+    assert not vickrey_auction.emergency_paused()
 
 
 # Owner control
 
 
-def test_set_owner(auction_house, deployer, alice):
-    auction_house.set_owner(alice, sender=deployer)
-    assert auction_house.owner() == alice
+def test_set_owner(vickrey_auction, deployer, alice):
+    vickrey_auction.set_owner(alice, sender=deployer)
+    assert vickrey_auction.owner() == alice
 
 
-def test_set_owner_zero_address(auction_house, deployer):
+def test_set_owner_zero_address(vickrey_auction, deployer):
     with ape.reverts("Cannot set owner to zero address"):
-        auction_house.set_owner(ape.utils.ZERO_ADDRESS, sender=deployer)
-    assert auction_house.owner() == deployer
+        vickrey_auction.set_owner(ape.utils.ZERO_ADDRESS, sender=deployer)
+    assert vickrey_auction.owner() == deployer
 
 
-def test_set_time_buffer(auction_house, deployer):
-    auction_house.set_time_buffer(200, sender=deployer)
-    assert auction_house.time_buffer() == 200
+def test_set_time_buffer(vickrey_auction, deployer):
+    vickrey_auction.set_time_buffer(200, sender=deployer)
+    assert vickrey_auction.time_buffer() == 200
 
 
-def test_set_reserve_price(auction_house, deployer):
-    auction_house.set_reserve_price(200, sender=deployer)
-    assert auction_house.reserve_price() == 200
+def test_set_reserve_price(vickrey_auction, deployer):
+    vickrey_auction.set_reserve_price(200, sender=deployer)
+    assert vickrey_auction.reserve_price() == 200
 
 
-def test_set_min_bid_increment_percentage(auction_house, deployer):
-    auction_house.set_min_bid_increment_percentage(15, sender=deployer)
-    assert auction_house.min_bid_increment_percentage() == 15
+def test_set_min_bid_increment_percentage(vickrey_auction, deployer):
+    vickrey_auction.set_min_bid_increment_percentage(15, sender=deployer)
+    assert vickrey_auction.min_bid_increment_percentage() == 15
 
 
-def test_set_min_bid_increment_percentage_above_range(auction_house, deployer):
+def test_set_min_bid_increment_percentage_above_range(vickrey_auction, deployer):
     with ape.reverts("_min_bid_increment_percentage out of range"):
-        auction_house.set_min_bid_increment_percentage(16, sender=deployer)
-    assert auction_house.min_bid_increment_percentage() == 5
+        vickrey_auction.set_min_bid_increment_percentage(16, sender=deployer)
+    assert vickrey_auction.min_bid_increment_percentage() == 5
 
 
-def test_set_min_bid_increment_percentage_below_range(auction_house, deployer):
+def test_set_min_bid_increment_percentage_below_range(vickrey_auction, deployer):
     with ape.reverts("_min_bid_increment_percentage out of range"):
-        auction_house.set_min_bid_increment_percentage(1, sender=deployer)
-    assert auction_house.min_bid_increment_percentage() == 5
+        vickrey_auction.set_min_bid_increment_percentage(1, sender=deployer)
+    assert vickrey_auction.min_bid_increment_percentage() == 5
 
 
-def test_set_duration(auction_house, deployer):
-    auction_house.set_duration(4000, sender=deployer)
-    assert auction_house.duration() == 4000
+def test_set_duration(vickrey_auction, deployer):
+    vickrey_auction.set_duration(4000, sender=deployer)
+    assert vickrey_auction.duration() == 4000
 
 
-def test_set_duration_above_range(auction_house, deployer):
+def test_set_duration_above_range(vickrey_auction, deployer):
     with ape.reverts("_duration out of range"):
-        auction_house.set_duration(260000, sender=deployer)
-    assert auction_house.duration() == 3600
+        vickrey_auction.set_duration(260000, sender=deployer)
+    assert vickrey_auction.duration() == 3600
 
 
-def test_set_duration_below_range(auction_house, deployer):
+def test_set_duration_below_range(vickrey_auction, deployer):
     with ape.reverts("_duration out of range"):
-        auction_house.set_duration(3599, sender=deployer)
-    assert auction_house.duration() == 3600
+        vickrey_auction.set_duration(3599, sender=deployer)
+    assert vickrey_auction.duration() == 3600
 
 
-def test_set_price_provider_zero_address(auction_house, deployer):
+def test_set_price_provider_zero_address(vickrey_auction, deployer):
     with ape.reverts("Invalid _price_provider address"):
-        auction_house.set_price_provider(ape.utils.ZERO_ADDRESS, sender=deployer)
+        vickrey_auction.set_price_provider(ape.utils.ZERO_ADDRESS, sender=deployer)
 
 
-def test_emergency_paused(auction_house, deployer):
-    assert not auction_house.emergency_paused()
-    auction_house.emergency_pause(sender=deployer)
-    assert auction_house.emergency_paused()
+def test_emergency_paused(vickrey_auction, deployer):
+    assert not vickrey_auction.emergency_paused()
+    vickrey_auction.emergency_pause(sender=deployer)
+    assert vickrey_auction.emergency_paused()
 
 
-def test_emergency_paused_not_owner(auction_house, alice):
+def test_emergency_paused_not_owner(vickrey_auction, alice):
     with ape.reverts("Caller is not the owner"):
-        auction_house.emergency_pause(sender=alice)
+        vickrey_auction.emergency_pause(sender=alice)
 
 
-def test_set_price_provider_not_owner(auction_house, alice):
+def test_set_price_provider_not_owner(vickrey_auction, alice):
     with ape.reverts("Caller is not the owner"):
-        auction_house.set_price_provider(ape.utils.ZERO_ADDRESS, sender=alice)
+        vickrey_auction.set_price_provider(ape.utils.ZERO_ADDRESS, sender=alice)
 
 
-# @todo - emergency_pause not owner
-
-
-def test_set_owner_not_owner(auction_house, alice):
+def test_emergency_pause_not_owner(vickrey_auction, alice):
     with ape.reverts("Caller is not the owner"):
-        auction_house.set_owner(alice, sender=alice)
+        vickrey_auction.emergency_pause(sender=alice)
 
 
-def test_set_time_buffer_not_owner(auction_house, alice):
+def test_set_owner_not_owner(vickrey_auction, alice):
     with ape.reverts("Caller is not the owner"):
-        auction_house.set_time_buffer(200, sender=alice)
+        vickrey_auction.set_owner(alice, sender=alice)
 
 
-def test_set_reserve_price_not_owner(auction_house, alice):
+def test_set_time_buffer_not_owner(vickrey_auction, alice):
     with ape.reverts("Caller is not the owner"):
-        auction_house.set_reserve_price(200, sender=alice)
+        vickrey_auction.set_time_buffer(200, sender=alice)
 
 
-def test_set_min_bid_increment_percentage_not_owner(auction_house, alice):
+def test_set_reserve_price_not_owner(vickrey_auction, alice):
     with ape.reverts("Caller is not the owner"):
-        auction_house.set_min_bid_increment_percentage(200, sender=alice)
+        vickrey_auction.set_reserve_price(200, sender=alice)
 
 
-def test_set_duration_not_owner(auction_house, alice):
+def test_set_min_bid_increment_percentage_not_owner(vickrey_auction, alice):
     with ape.reverts("Caller is not the owner"):
-        auction_house.set_duration(1000, sender=alice)
+        vickrey_auction.set_min_bid_increment_percentage(200, sender=alice)
+
+
+def test_set_duration_not_owner(vickrey_auction, alice):
+    with ape.reverts("Caller is not the owner"):
+        vickrey_auction.set_duration(1000, sender=alice)
 
 
 # Public Bidding
+        
+# @todo (1) test_create_bid_send_eth - fail
 
 
-# def test_create_bid(auction_house_unpaused, alice):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     current_auction = auction_house_unpaused.auction()
-#     assert current_auction["bidder"] == alice
-#     assert current_auction["amount"] == 100
+def test_create_bid(vickrey_auction_created, alice, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    current_auction = vickrey_auction_created.auction()
+    assert current_auction["bidder"] == alice
+    assert current_auction["bid"] == 100
+    assert current_auction["price"] == 100
+    assert current_auction["end_time"] == current_auction["start_time"] + vickrey_auction_created.duration()
 
 
-# def test_create_bid_send_more_than_last_bid(auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     firt_bid = auction_house_unpaused.auction()
-#     assert firt_bid["bidder"] == alice
-#     assert firt_bid["amount"] == 100
+def test_create_bid_send_more_than_last_bid(vickrey_auction_created, alice, bob, minted_erc20token_to_users, price_provider):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    current_auction = vickrey_auction_created.auction()
+    assert current_auction["bidder"] == alice
+    assert current_auction["bid"] == 100
+    assert current_auction["price"] == 100
+    assert current_auction["end_time"] == current_auction["start_time"] + vickrey_auction_created.duration()
 
-#     auction_house_unpaused.create_bid(20, 1000, {"from": bob, "value": "1000 wei"})
-#     second_bid = auction_house_unpaused.auction()
-#     assert second_bid["bidder"] == bob
-#     assert second_bid["amount"] == 1000
+    minted_erc20token_to_users.approve(vickrey_auction_created, 1000, sender=bob)
+    vickrey_auction_created.create_bid(0, 1000, sender=bob)
+    current_auction = vickrey_auction_created.auction()
+    assert current_auction["bidder"] == bob
+    assert current_auction["bid"] == 1000
+    assert current_auction["price"] == price_provider.get_price(1000, 100, sender=bob)
+    assert current_auction["end_time"] == current_auction["start_time"] + vickrey_auction_created.duration()
 
 
-# def test_create_bid_wrong_llama_id(auction_house_unpaused, alice):
-#     auction_house_unpaused.disable_wl()
-#     with brownie.reverts("Llama not up for auction"):
-#         auction_house_unpaused.create_bid(19, 100, {"from": alice, "value": "100 wei"})
+def test_create_bid_wrong_nft_id(vickrey_auction_created, alice, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    with ape.reverts("NFT not up for auction"):
+        vickrey_auction_created.create_bid(1, 100, sender=alice)
 
 
-# def test_create_bid_auction_expired(auction_house_unpaused, alice):
-#     auction_house_unpaused.disable_wl()
-#     # Expire the auction
-#     chain.sleep(1000)
-#     with brownie.reverts("Auction expired"):
-#         auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
+def test_create_bid_auction_expired(chain, vickrey_auction_created, alice, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    # Expire the auction
+    chain.pending_timestamp += 4000
+    with ape.reverts("Auction expired"):
+        vickrey_auction_created.create_bid(0, 100, sender=alice)
 
 
-# def test_create_bid_value_too_low(auction_house_unpaused, alice):
-#     auction_house_unpaused.disable_wl()
-#     with brownie.reverts("Must send at least reservePrice"):
-#         auction_house_unpaused.create_bid(20, 1, {"from": alice, "value": "1 wei"})
+def test_create_bid_value_too_low(vickrey_auction_created, alice, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 1, sender=alice)
+    with ape.reverts("Must send at least reservePrice"):
+        vickrey_auction_created.create_bid(0, 1, sender=alice)
 
 
-# def test_create_bid_not_over_prev_bid(auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     bid_before = auction_house_unpaused.auction()
-#     assert bid_before["bidder"] == alice
-#     assert bid_before["amount"] == 100
+def test_create_bid_not_over_prev_bid(vickrey_auction_created, alice, bob, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    current_auction = vickrey_auction_created.auction()
+    assert current_auction["bidder"] == alice
+    assert current_auction["bid"] == 100
+    assert current_auction["price"] == 100
+    assert current_auction["end_time"] == current_auction["start_time"] + vickrey_auction_created.duration()
 
-#     with brownie.reverts("Must send more than last bid by min_bid_increment_percentage amount"):
-#         auction_house_unpaused.create_bid(20, 101, {"from": bob, "value": "101 wei"})
+    minted_erc20token_to_users.approve(vickrey_auction_created, 101, sender=bob)
+    with ape.reverts("Must send more than last bid by min_bid_increment_percentage amount"):
+        vickrey_auction_created.create_bid(0, 101, sender=bob)
 
-#     bid_after = auction_house_unpaused.auction()
-#     assert bid_after["bidder"] == alice
-#     assert bid_after["amount"] == 100
+    bid_after = vickrey_auction_created.auction()
+    assert bid_after["bidder"] == alice
+    assert bid_after["bid"] == 100
+    assert bid_after["price"] == 100
+    assert bid_after["end_time"] == bid_after["start_time"] + vickrey_auction_created.duration()
 
 
-# def test_create_bid_using_pending_returns(token, auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     bid_before = auction_house_unpaused.auction()
-#     assert bid_before["bidder"] == alice
-#     assert bid_before["amount"] == 100
+# WITHDRAW
 
-#     auction_house_unpaused.create_bid(20, 106, {"from": bob, "value": "106 wei"})
-#     auction_2 = auction_house_unpaused.auction()
-#     assert auction_2["bidder"] == bob
-#     assert auction_2["amount"] == 106
 
-#     assert auction_house_unpaused.pending_returns(alice) == 100
+def test_create_second_bid_and_withdraw(vickrey_auction_created, alice, bob, minted_erc20token_to_users, price_provider):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    bid_before = vickrey_auction_created.auction()
+    assert bid_before["bidder"] == alice
+    assert bid_before["bid"] == 100
+    assert bid_before["price"] == 100
+    assert bid_before["end_time"] == bid_before["start_time"] + vickrey_auction_created.duration()
+    alice_balance_before = minted_erc20token_to_users.balanceOf(alice, sender=alice)
 
-#     auction_house_unpaused.create_bid(20, 125, {"from": alice, "value": "25 wei"})
+    minted_erc20token_to_users.approve(vickrey_auction_created, 1000, sender=bob)
+    vickrey_auction_created.create_bid(0, 1000, sender=bob)
 
-#     auction_3 = auction_house_unpaused.auction()
-#     assert auction_3["bidder"] == alice
-#     assert auction_3["amount"] == 125
-#     assert auction_house_unpaused.pending_returns(alice) == 0
-
-#     chain.sleep(101)
-
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-
-#     assert token.ownerOf(20) == alice
-
-
-# def test_create_bid_using_pending_returns_from_previous_auction(
-#     token, auction_house_unpaused, alice, bob
-# ):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     bid_before = auction_house_unpaused.auction()
-#     assert bid_before["bidder"] == alice
-#     assert bid_before["amount"] == 100
-
-#     auction_house_unpaused.create_bid(20, 106, {"from": bob, "value": "106 wei"})
-#     auction_2 = auction_house_unpaused.auction()
-#     assert auction_2["bidder"] == bob
-#     assert auction_2["amount"] == 106
-
-#     assert auction_house_unpaused.pending_returns(alice) == 100
-
-#     chain.sleep(101)
-
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-
-#     auction_house_unpaused.create_bid(21, 100, {"from": alice})
-
-#     new_auction = auction_house_unpaused.auction()
-#     new_auction["bidder"] == alice
-#     new_auction["amount"] == 100
-
-#     assert auction_house_unpaused.pending_returns(alice) == 0
-
-#     chain.sleep(101)
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-#     assert token.ownerOf(21) == alice
-
-
-# def test_create_bid_using_pending_returns_outbid(token, auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     bid_before = auction_house_unpaused.auction()
-#     assert bid_before["bidder"] == alice
-#     assert bid_before["amount"] == 100
-
-#     auction_house_unpaused.create_bid(20, 106, {"from": bob, "value": "106 wei"})
-#     auction_1 = auction_house_unpaused.auction()
-#     assert auction_1["bidder"] == bob
-#     assert auction_1["amount"] == 106
-
-#     auction_house_unpaused.create_bid(20, 125, {"from": alice, "value": "25 wei"})
-
-#     auction_house_unpaused.create_bid(20, 200, {"from": bob, "value": "200 wei"})
-
-#     assert auction_house_unpaused.pending_returns(alice) == 125
-
-#     auction_2 = auction_house_unpaused.auction()
-#     assert auction_2["bidder"] == bob
-#     assert auction_2["amount"] == 200
-
-
-# def test_create_bid_using_pending_returns_not_enough(auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     bid_before = auction_house_unpaused.auction()
-#     assert bid_before["bidder"] == alice
-#     assert bid_before["amount"] == 100
-
-#     auction_house_unpaused.create_bid(20, 106, {"from": bob, "value": "106 wei"})
-#     auction_2 = auction_house_unpaused.auction()
-#     assert auction_2["bidder"] == bob
-#     assert auction_2["amount"] == 106
-
-#     with brownie.reverts("Does not have enough pending returns to cover remainder"):
-#         auction_house_unpaused.create_bid(20, 126, {"from": alice, "value": "25 wei"})
-
-#     auction_3 = auction_house_unpaused.auction()
-#     assert auction_3["bidder"] == bob
-#     assert auction_3["amount"] == 106
-
-#     assert auction_house_unpaused.pending_returns(alice) == 100
-
-
-# # WITHDRAW
-
-
-# def test_create_second_bid_and_withdraw(auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     bid_before = auction_house_unpaused.auction()
-#     assert bid_before["bidder"] == alice
-#     assert bid_before["amount"] == 100
-#     alice_balance_before = alice.balance()
-
-#     auction_house_unpaused.create_bid(20, 1000, {"from": bob, "value": "1000 wei"})
-
-#     bid_after = auction_house_unpaused.auction()
-#     assert bid_after["bidder"] == bob
-#     assert bid_after["amount"] == 1000
-
-#     auction_house_unpaused.withdraw({"from": alice})
-
-#     alice_balance_after = alice.balance()
-
-#     assert alice_balance_after == alice_balance_before + 100
-
-
-# def test_withdraw_zero_pending(auction_house, alice):
-#     balance_before = alice.balance()
-#     auction_house.withdraw({"from": alice})
-#     balance_after = alice.balance()
-#     assert balance_before == balance_after
-
-
-# def test_withdraw_stale(token, auction_house_unpaused, deployer, split_recipient, alice, bob):
-#     balance_of_alice_before = alice.balance()
-#     balance_of_deployer_before = deployer.balance()
-#     balance_of_split_recipient_before = split_recipient.balance()
-
-#     create_pending_returns(auction_house_unpaused, alice, bob)
-#     chain.sleep(1000)
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-
-#     assert token.ownerOf(20) == bob
-#     assert deployer.balance() == balance_of_deployer_before + 10
-#     assert split_recipient.balance() == balance_of_split_recipient_before + 190
-#     assert alice.balance() == balance_of_alice_before - 100
-#     assert auction_house_unpaused.pending_returns(alice) == 100
-#     auction_house_unpaused.withdraw_stale([alice])
-#     assert auction_house_unpaused.pending_returns(alice) == 0
-#     assert alice.balance() == balance_of_alice_before - 5  # Alice gets a 5% penalty
-#     assert (
-#         deployer.balance() == balance_of_deployer_before + 15
-#     )  # The owner takes 5% of alices pending returns
-
-
-# def test_withdraw_stale_user_has_no_pending_withdraws(auction_house_unpaused, alice, bob, charlie):
-#     balance_of_alice_before = alice.balance()
-#     balance_of_bob_before = bob.balance()
-#     balance_of_charlie_before = charlie.balance()
-#     wei_charlie_spent_to_win_auction = 200
-#     wei_fee_bob_payed_for_admin_stale_withdraw = 5
-
-#     create_pending_returns(auction_house_unpaused, bob, charlie)
-#     chain.sleep(1000)
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-
-#     assert auction_house_unpaused.pending_returns(alice) == 0
-#     assert auction_house_unpaused.pending_returns(bob) == 100
-#     assert auction_house_unpaused.pending_returns(charlie) == 0
-#     auction_house_unpaused.withdraw_stale([alice, bob, charlie])
-#     assert (
-#         alice.balance() == balance_of_alice_before
-#     )  # Alice didn't have anything to withdraw because she never placed a bid.
-#     assert (
-#         bob.balance() == balance_of_bob_before - wei_fee_bob_payed_for_admin_stale_withdraw
-#     )  # Bob had 100 wei to withdraw but payed a 5% admin withdrawal fee.
-#     assert (
-#         charlie.balance() == balance_of_charlie_before - wei_charlie_spent_to_win_auction
-#     )  # Charlie didn't have anything to withdraw because he won the auction.
-
-
-# def test_settle_auction_no_bid(token, deployer, auction_house_unpaused):
-#     assert not auction_house_unpaused.auction()["settled"]
-#     chain.sleep(1000)
-#     auction_house_unpaused.pause()
-#     auction_house_unpaused.settle_auction()
-#     assert auction_house_unpaused.auction()["settled"]
-#     # Token was transferred to owner when no one bid
-#     assert token.ownerOf(20) == deployer
-
-
-# def test_settle_auction_when_not_paused(auction_house_unpaused):
-#     with brownie.reverts("Auction house is not paused"):
-#         auction_house_unpaused.settle_auction()
-
-
-# def test_settle_current_and_create_new_auction_no_bid(
-#     token, deployer, auction_house_unpaused, split_recipient
-# ):
-#     auction_house_unpaused.disable_wl()
-#     assert not auction_house_unpaused.auction()["settled"]
-#     old_auction_id = auction_house_unpaused.auction()["llama_id"]
-#     chain.sleep(1000)
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-#     new_auction_id = auction_house_unpaused.auction()["llama_id"]
-#     assert not auction_house_unpaused.auction()["settled"]
-#     assert old_auction_id < new_auction_id
-#     # Token was transferred to owner when no one bid
-#     assert token.ownerOf(20) == deployer
-
-
-# def test_settle_auction_with_bid(token, deployer, auction_house_unpaused, alice, split_recipient):
-#     auction_house_unpaused.disable_wl()
-#     assert not auction_house_unpaused.auction()["settled"]
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     chain.sleep(1000)
-#     auction_house_unpaused.pause()
-#     deployer_balance_before = deployer.balance()
-#     split_recipient_before = split_recipient.balance()
-#     auction_house_unpaused.settle_auction()
-#     deployer_balance_after = deployer.balance()
-#     split_recipient_after = split_recipient.balance()
-#     assert auction_house_unpaused.auction()["settled"]
-#     assert token.ownerOf(20) == alice
-#     assert deployer_balance_after == deployer_balance_before + 5
-#     assert split_recipient_after == split_recipient_before + 95
-
-
-# def test_settle_current_and_create_new_auction_with_bid_smart_contract_owner(
-#     token, smart_contract_owner, auction_house_sc_owner, alice, split_recipient
-# ):
-#     assert not auction_house_sc_owner.auction()["settled"]
-#     auction_house_sc_owner.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     chain.sleep(1000)
-#     deployer_balance_before = smart_contract_owner.balance()
-#     split_recipient_before = split_recipient.balance()
-#     auction_house_sc_owner.settle_current_and_create_new_auction()
-#     deployer_balance_after = smart_contract_owner.balance()
-#     split_recipient_after = split_recipient.balance()
-#     assert auction_house_sc_owner.auction()["llama_id"] == 21
-#     assert token.ownerOf(20) == alice
-#     assert deployer_balance_after == deployer_balance_before + 5
-#     assert split_recipient_after == split_recipient_before + 95
-
-
-# def test_settle_current_and_create_new_auction_with_bid(
-#     deployer, auction_house_unpaused, alice, split_recipient
-# ):
-#     auction_house_unpaused.disable_wl()
-#     assert not auction_house_unpaused.auction()["settled"]
-#     old_auction_id = auction_house_unpaused.auction()["llama_id"]
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     chain.sleep(1000)
-#     deployer_balance_before = deployer.balance()
-#     split_recipient_before = split_recipient.balance()
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-#     deployer_balance_after = deployer.balance()
-#     split_recipient_after = split_recipient.balance()
-#     new_auction_id = auction_house_unpaused.auction()["llama_id"]
-#     assert not auction_house_unpaused.auction()["settled"]
-#     assert old_auction_id < new_auction_id
-#     assert deployer_balance_after == deployer_balance_before + 5
-#     assert split_recipient_after == split_recipient_before + 95
-
-
-# def test_settle_current_and_create_new_auction_when_paused(token, auction_house):
-#     token.set_minter(auction_house)
-#     with brownie.reverts("Auction house is paused"):
-#         auction_house.settle_current_and_create_new_auction()
-
-
-# def test_settle_auction_multiple_bids(
-#     token, deployer, auction_house_unpaused, split_recipient, alice, bob
-# ):
-#     auction_house_unpaused.disable_wl()
-#     assert not auction_house_unpaused.auction()["settled"]
-#     alice_balance_start = alice.balance()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     auction_house_unpaused.create_bid(20, 1000, {"from": bob, "value": "1000 wei"})
-#     chain.sleep(1000)
-#     auction_house_unpaused.pause()
-#     deployer_balance_before = deployer.balance()
-#     split_recipient_before = split_recipient.balance()
-#     auction_house_unpaused.settle_auction()
-#     deployer_balance_after = deployer.balance()
-#     split_recipient_after = split_recipient.balance()
-#     alice_balance_before_withdraw = alice.balance()
-#     assert alice_balance_before_withdraw == alice_balance_start - 100
-#     auction_house_unpaused.withdraw({"from": alice})
-#     alice_balance_after_withdraw = alice.balance()
-#     assert alice_balance_after_withdraw == alice_balance_start
-#     assert auction_house_unpaused.auction()["settled"]
-#     assert token.ownerOf(20) == bob
-#     assert deployer_balance_after == deployer_balance_before + 50
-#     assert split_recipient_after == split_recipient_before + 950
-
-
-# def test_bidder_outbids_prev_bidder(
-#     token, auction_house_unpaused, deployer, split_recipient, alice, bob
-# ):
-#     auction_house_unpaused.disable_wl()
-#     assert not auction_house_unpaused.auction()["settled"]
-#     alice_balance_start = alice.balance()
-#     bob_balance_start = bob.balance()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     auction_house_unpaused.create_bid(20, 1000, {"from": bob, "value": "1000 wei"})
-#     auction_house_unpaused.create_bid(20, 2000, {"from": alice, "value": "2000 wei"})
-#     chain.sleep(1000)
-#     deployer_balance_before = deployer.balance()
-#     split_recipient_before = split_recipient.balance()
-#     auction_house_unpaused.settle_current_and_create_new_auction()
-#     deployer_balance_after = deployer.balance()
-#     split_recipient_after = split_recipient.balance()
-#     alice_balance_before_withdraw = alice.balance()
-#     bob_balance_before_withdraw = bob.balance()
-#     assert alice_balance_before_withdraw == alice_balance_start - 2100
-#     assert bob_balance_before_withdraw == bob_balance_start - 1000
-#     auction_house_unpaused.withdraw({"from": alice})
-#     auction_house_unpaused.withdraw({"from": bob})
-#     alice_balance_after_withdraw = alice.balance()
-#     bob_balance_after_withdraw = bob.balance()
-#     assert alice_balance_after_withdraw == alice_balance_start - 2000
-#     assert bob_balance_after_withdraw == bob_balance_start
-#     assert not auction_house_unpaused.auction()["settled"]
-#     assert token.ownerOf(20) == alice
-#     assert deployer_balance_after == deployer_balance_before + 100
-#     assert split_recipient_after == split_recipient_before + 1900
-
-
-# # AUCTION EXTENSION
-
-
-# def test_create_bid_auction_extended(auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     starting_block_timestamp = chain.time()
-#     chain.sleep(90)
-#     auction_house_unpaused.create_bid(20, 1000, {"from": bob, "value": "1000 wei"})
-#     assert auction_house_unpaused.auction()["end_time"] == starting_block_timestamp + 190
-#     assert not auction_house_unpaused.auction()["settled"]
-
-
-# def test_create_bid_auction_not_extended(auction_house_unpaused, alice, bob):
-#     auction_house_unpaused.disable_wl()
-#     auction_house_unpaused.create_bid(20, 100, {"from": alice, "value": "100 wei"})
-#     chain.sleep(101)
-#     with brownie.reverts("Auction expired"):
-#         auction_house_unpaused.create_bid(20, 1000, {"from": bob, "value": "1000 wei"})
+    bid_after = vickrey_auction_created.auction()
+    assert bid_after["bidder"] == bob
+    assert bid_after["bid"] == 1000
+    assert bid_after["price"] == price_provider.get_price(1000, 100, sender=bob)
+    assert bid_after["end_time"] == bid_after["start_time"] + vickrey_auction_created.duration()
+
+    vickrey_auction_created.withdraw(sender=alice)
+
+    alice_balance_after = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+
+    assert alice_balance_after == alice_balance_before + 100
+
+
+def test_withdraw_zero_pending(vickrey_auction_created, alice, minted_erc20token_to_users):
+    balance_before = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    vickrey_auction_created.withdraw(sender=alice)
+    balance_after = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    assert balance_before == balance_after
+
+
+def test_emergency_withdraw(vickrey_auction_created, deployer, alice, bob, minted_erc20token_to_users):
+    balance_of_alice_before = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    balance_of_bob_before = minted_erc20token_to_users.balanceOf(bob, sender=bob)
+    balance_of_deployer_before = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+
+    create_pending_returns(vickrey_auction_created, alice, bob, minted_erc20token_to_users)
+
+    vickrey_auction_created.emergency_pause(sender=deployer)
+
+    assert minted_erc20token_to_users.balanceOf(deployer, sender=deployer) == balance_of_deployer_before
+    assert minted_erc20token_to_users.balanceOf(alice, sender=alice) == balance_of_alice_before - 100
+    assert minted_erc20token_to_users.balanceOf(bob, sender=bob) == balance_of_bob_before - 200
+    assert vickrey_auction_created.pending_returns(alice) == 100
+    assert vickrey_auction_created.pending_returns(bob) == 200
+
+    vickrey_auction_created.withdraw_multiple([alice.address, bob.address], sender=alice)
+
+    assert vickrey_auction_created.pending_returns(alice) == 0
+    assert vickrey_auction_created.pending_returns(bob) == 0
+    assert minted_erc20token_to_users.balanceOf(alice, sender=alice) == balance_of_alice_before - 100
+    assert minted_erc20token_to_users.balanceOf(bob, sender=bob) == balance_of_bob_before - 200
+    assert (minted_erc20token_to_users.balanceOf(deployer, sender=deployer) == balance_of_deployer_before + 300)
+
+
+def test_settle_auction_no_bid(chain, vickrey_auction_created, token, alice, deployer):
+    assert not vickrey_auction_created.auction()["settled"]
+
+    chain.pending_timestamp += vickrey_auction_created.duration()
+
+    with ape.reverts("Only owner can settle the auction within 2 hours after it ends"):
+        vickrey_auction_created.settle_auction(sender=alice)
+    
+    chain.pending_timestamp += 7200 # vickrey_auction_created.AUCTION_SETTLEMENT_ONLY_OWNER_BUFFER()
+
+    vickrey_auction_created.settle_auction(sender=alice)
+
+    assert vickrey_auction_created.auction()["settled"]
+    # Token was transferred to owner when no one bid
+    assert token.ownerOf(0) == deployer
+
+
+def test_settle_auction_when_not_paused(vickrey_auction, deployer):
+    with ape.reverts("Auction is not paused"):
+        vickrey_auction.settle_auction(sender=deployer)
+
+
+def test_settle_current_and_create_new_auction_no_bid(chain, token, deployer, vickrey_auction_created, split_recipient):
+    assert not vickrey_auction_created.auction()["settled"]
+    old_auction_id = vickrey_auction_created.auction()["nft_id"]
+    chain.pending_timestamp += vickrey_auction_created.duration()
+    vickrey_auction_created.settle_auction(sender=deployer)
+    vickrey_auction_created.create_auction(sender=deployer)
+    new_auction_id = vickrey_auction_created.auction()["nft_id"]
+    assert not vickrey_auction_created.auction()["settled"]
+    assert old_auction_id < new_auction_id
+    # Token was transferred to owner when no one bid
+    assert token.ownerOf(0) == deployer
+
+
+def test_settle_auction_with_bid(chain, token, deployer, vickrey_auction_created, alice, split_recipient, minted_erc20token_to_users):
+    assert not vickrey_auction_created.auction()["settled"]
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    chain.pending_timestamp += vickrey_auction_created.duration()
+    deployer_balance_before = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_before = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    vickrey_auction_created.settle_auction(sender=deployer)
+    deployer_balance_after = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_after = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    assert vickrey_auction_created.auction()["settled"]
+    assert token.ownerOf(0) == alice
+    assert deployer_balance_after == deployer_balance_before + 5
+    assert split_recipient_after == split_recipient_before + 95
+
+
+def test_settle_current_and_create_new_auction_with_bid(
+        chain, deployer, vickrey_auction_created, alice, split_recipient, minted_erc20token_to_users
+    ):
+    assert not vickrey_auction_created.auction()["settled"]
+    old_auction_id = vickrey_auction_created.auction()["nft_id"]
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    chain.pending_timestamp += vickrey_auction_created.duration()
+    deployer_balance_before = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_before = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    vickrey_auction_created.settle_auction(sender=deployer)
+    vickrey_auction_created.create_auction(sender=deployer)
+    deployer_balance_after = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_after = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    new_auction_id = vickrey_auction_created.auction()["nft_id"]
+    assert not vickrey_auction_created.auction()["settled"]
+    assert old_auction_id < new_auction_id
+    assert deployer_balance_after == deployer_balance_before + 5
+    assert split_recipient_after == split_recipient_before + 95
+
+
+def test_settle_auction_multiple_bids(
+    chain, token, deployer, vickrey_auction_created, split_recipient, alice, bob, minted_erc20token_to_users
+):
+    assert not vickrey_auction_created.auction()["settled"]
+    alice_balance_start = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    minted_erc20token_to_users.approve(vickrey_auction_created, 1000, sender=bob)
+    vickrey_auction_created.create_bid(0, 1000, sender=bob)
+    chain.pending_timestamp += vickrey_auction_created.duration()
+    deployer_balance_before = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_before = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    vickrey_auction_created.settle_auction(sender=deployer)
+    deployer_balance_after = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_after = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    alice_balance_before_withdraw = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    assert alice_balance_before_withdraw == alice_balance_start - 100
+    vickrey_auction_created.withdraw(sender=alice)
+    alice_balance_after_withdraw = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    assert alice_balance_after_withdraw == alice_balance_start
+    assert vickrey_auction_created.auction()["settled"]
+    assert token.ownerOf(0) == bob
+    assert deployer_balance_after == deployer_balance_before + 28
+    assert split_recipient_after == split_recipient_before + 522
+
+
+def test_bidder_outbids_prev_bidder(
+    chain, token, vickrey_auction_created, deployer, split_recipient, alice, bob, minted_erc20token_to_users
+):
+    assert not vickrey_auction_created.auction()["settled"]
+    alice_balance_start = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    bob_balance_start = minted_erc20token_to_users.balanceOf(bob, sender=bob)
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    minted_erc20token_to_users.approve(vickrey_auction_created, 1000, sender=bob)
+    vickrey_auction_created.create_bid(0, 1000, sender=bob)
+    minted_erc20token_to_users.approve(vickrey_auction_created, 2000, sender=alice)
+    vickrey_auction_created.create_bid(0, 2000, sender=alice)
+    chain.pending_timestamp += vickrey_auction_created.duration()
+    deployer_balance_before = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_before = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    price = vickrey_auction_created.auction()["price"]
+    vickrey_auction_created.settle_auction(sender=deployer)
+    vickrey_auction_created.create_auction(sender=deployer)
+    deployer_balance_after = minted_erc20token_to_users.balanceOf(deployer, sender=deployer)
+    split_recipient_after = minted_erc20token_to_users.balanceOf(split_recipient, sender=split_recipient)
+    alice_balance_before_withdraw = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    bob_balance_before_withdraw = minted_erc20token_to_users.balanceOf(bob, sender=bob)
+    assert alice_balance_before_withdraw == alice_balance_start - 2100
+    assert bob_balance_before_withdraw == bob_balance_start - 1000
+    vickrey_auction_created.withdraw(sender=alice)
+    vickrey_auction_created.withdraw(sender=bob)
+    alice_balance_after_withdraw = minted_erc20token_to_users.balanceOf(alice, sender=alice)
+    bob_balance_after_withdraw = minted_erc20token_to_users.balanceOf(bob, sender=bob)
+    assert alice_balance_after_withdraw == alice_balance_start - price
+    assert bob_balance_after_withdraw == bob_balance_start
+    assert not vickrey_auction_created.auction()["settled"]
+    assert token.ownerOf(0) == alice
+    assert deployer_balance_after == deployer_balance_before + (price * 5 / 100)
+    assert split_recipient_after == split_recipient_before + (price * 95 / 100)
+
+
+# AUCTION EXTENSION
+
+
+def test_create_bid_auction_extended(chain, vickrey_auction_created, alice, bob, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    starting_block_timestamp = chain.pending_timestamp
+    chain.pending_timestamp += 3550
+    minted_erc20token_to_users.approve(vickrey_auction_created, 1000, sender=bob)
+    vickrey_auction_created.create_bid(0, 1000, sender=bob)
+    assert vickrey_auction_created.auction()["end_time"] == chain.pending_timestamp + vickrey_auction_created.time_buffer() - 1
+    assert not vickrey_auction_created.auction()["settled"]
+
+
+def test_create_bid_auction_not_extended(chain, vickrey_auction_created, alice, bob, minted_erc20token_to_users):
+    minted_erc20token_to_users.approve(vickrey_auction_created, 100, sender=alice)
+    vickrey_auction_created.create_bid(0, 100, sender=alice)
+    chain.pending_timestamp += vickrey_auction_created.duration() + 1
+    minted_erc20token_to_users.approve(vickrey_auction_created, 1000, sender=bob)
+    with ape.reverts("Auction expired"):
+        vickrey_auction_created.create_bid(0, 1000, sender=bob)

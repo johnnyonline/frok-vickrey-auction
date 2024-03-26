@@ -79,11 +79,13 @@ event Withdraw:
 # will break without it.
 IDENTITY_PRECOMPILE: constant(address) = 0x0000000000000000000000000000000000000004
 
-PRICISION: constant(uint256) = 100
-INCREMENT_PERCENTAGE_LOWER_BOUND: constant(uint256) = 2
-INCREMENT_PERCENTAGE_UPPER_BOUND: constant(uint256) = 15
+AUCTION_SETTLEMENT_ONLY_OWNER_BUFFER: constant(uint256) = 7200
 DURATION_LOWER_BOUND: constant(uint256) = 3600
 DURATION_UPPER_BOUND: constant(uint256) = 259200
+INCREMENT_PERCENTAGE_LOWER_BOUND: constant(uint256) = 2
+INCREMENT_PERCENTAGE_UPPER_BOUND: constant(uint256) = 15
+MAX_WITHDRAWALS: constant(uint256) = 100
+PRICISION: constant(uint256) = 100
 
 # Auction
 time_buffer: public(uint256)
@@ -170,6 +172,7 @@ def create_auction():
 
     self._create_auction()
 
+
 @external
 @nonreentrant("lock")
 def settle_auction():
@@ -208,9 +211,10 @@ def withdraw(_for: address = msg.sender):
 
     self._withdraw(_for)
 
+
 @external
 @nonreentrant("lock")
-def withdraw_multiple(_fors: address[20]):
+def withdraw_multiple(_fors: DynArray[address, MAX_WITHDRAWALS]):
     """
     @dev Withdraw Token after losing auction, for multiple addresses.
     """
@@ -234,6 +238,7 @@ def set_time_buffer(_time_buffer: uint256):
 
     log AuctionTimeBufferUpdated(_time_buffer)
 
+
 @external
 def set_reserve_price(_reserve_price: uint256):
     """
@@ -245,6 +250,7 @@ def set_reserve_price(_reserve_price: uint256):
     self.reserve_price = _reserve_price
 
     log AuctionReservePriceUpdated(_reserve_price)
+
 
 @external
 def set_min_bid_increment_percentage(_min_bid_increment_percentage: uint256):
@@ -262,6 +268,7 @@ def set_min_bid_increment_percentage(_min_bid_increment_percentage: uint256):
 
     log AuctionMinBidIncrementPercentageUpdated(_min_bid_increment_percentage)
 
+
 @external
 def set_duration(_duration: uint256):
     """
@@ -274,6 +281,7 @@ def set_duration(_duration: uint256):
     self.duration = _duration
 
     log AuctionDurationUpdated(_duration)
+
 
 @external
 def set_price_provider(_price_provider: address):
@@ -302,17 +310,22 @@ def set_owner(_owner: address):
 
     log OwnerUpdated(_owner)
 
+
 @external
 def emergency_pause():
     """
-    @notice Admin function to permanently pause the contract and enable admin to withdraw all funds
+    @notice Admin function to permanently pause the contract and direct all withdrawals to himself
     """
 
     assert msg.sender == self.owner, "Caller is not the owner"
 
     self.emergency_paused = True
 
+    if not self.auction.settled and self.auction.bid > 0:
+        self.pending_returns[self.auction.bidder] = self.auction.bid
+
     log EmergencyPaused(msg.sender)
+
 
 ### INTERNAL FUNCTIONS ###
 
@@ -341,6 +354,7 @@ def _create_auction():
 
     log AuctionCreated(_id, _start_time, _end_time)
 
+
 @internal
 def _settle_auction():
     assert not self.emergency_paused, "Contract has been emergency paused"
@@ -348,7 +362,7 @@ def _settle_auction():
     assert not self.auction.settled, "Auction has already been settled"
     assert block.timestamp > self.auction.end_time, "Auction hasn't completed"
 
-    if block.timestamp < self.auction.end_time + 7200:
+    if block.timestamp < self.auction.end_time + AUCTION_SETTLEMENT_ONLY_OWNER_BUFFER:
         assert msg.sender == self.owner, "Only owner can settle the auction within 2 hours after it ends"
 
     self.paused = False
@@ -369,6 +383,7 @@ def _settle_auction():
         _owner_amount: uint256 = self.auction.price - _fee
         token.transfer(self.owner, _owner_amount, default_return_value=True)
         token.transfer(self.proceeds_receiver, _fee, default_return_value=True)
+
 
 @internal
 def _create_bid(_id: uint256, _bid: uint256):
@@ -405,6 +420,7 @@ def _create_bid(_id: uint256, _bid: uint256):
 
     token.transferFrom(msg.sender, self, _bid, default_return_value=True)
 
+
 @internal
 def _withdraw(_for: address):
     _pending_amount: uint256 = self.pending_returns[_for]
@@ -416,4 +432,4 @@ def _withdraw(_for: address):
 
         log Withdraw(msg.sender, _for, _receiver, _pending_amount)
 
-        token.transfer(_for, _pending_amount, default_return_value=True)
+        token.transfer(_receiver, _pending_amount, default_return_value=True)
